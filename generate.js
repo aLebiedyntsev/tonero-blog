@@ -181,7 +181,9 @@ Make sure the title is phrased to attract clicks from Google — someone searchi
     .replace(/^-|-$/g, '')
     .slice(0, 80);
 
-  post.date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const _now = new Date();
+  post.date      = _now.toISOString().split('T')[0]; // YYYY-MM-DD
+  post.createdAt = _now.toISOString();               // full ISO timestamp
   post.topicSeed = topic;
   post.keywords  = Array.isArray(post.keywords) ? post.keywords : [];
 

@@ -243,22 +243,52 @@ async function main() {
     const items = parseItems(xml);
     if (items.length === 0) { console.error('No items found in feed'); process.exit(1); }
 
-    // Score items: exclude violence, rank by communication relevance
+    // Score items: exclude violence, rank by communication relevance — keep top 10
     const candidates = items
       .filter(i => !EXCLUDE_RE.test(i.title + ' ' + i.desc))
       .map(i => ({ ...i, score: commScore(i.title + ' ' + i.desc) }))
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
 
     if (candidates.length === 0) {
       console.error('All articles were filtered by exclusion keywords — try a different feed');
       process.exit(1);
     }
 
-    article = candidates[0];
-    console.log(`Selected: "${article.title}" (comm-score: ${article.score})`);
+    // article will be resolved from top-10 list by GPT
+    article = candidates; // array; main() will handle both array and single-article cases
+    console.log(`Top-${candidates.length} candidates collected`);
   }
 
   // ── Build prompt ──────────────────────────────────────────────────────────────
+  // Normalize: article may be an array (from RSS top-10) or a single object (from env vars)
+  const articleList = Array.isArray(article) ? article : [article];
+  const isWorldCat  = feedCategory === 'world';
+
+  const neutralityBlock = isWorldCat ? `
+POLITICAL NEUTRALITY — MANDATORY:
+- DO NOT criticize, mock, celebrate, or take sides on any political figure, party, or policy
+- DO NOT frame any political actor as having "failed" or done something wrong in a political sense
+- political events are ONLY a backdrop — your post pivots immediately to universal workplace communication lessons
+- DO NOT use an individual's name in the title — keep the headline about the communication concept
+- DO NOT assign blame or make value judgments; describe communication choices factually and neutrally
+- Treat ALL political figures exactly as you would treat a neutral hypothetical "executive" — their actions are a communication case-study only` : '';
+
+  const anglesBlock = isWorldCat ? `CREATIVE ANGLES — read all articles first, then pick ONE angle that fits the best article:
+  A) "The communication pattern behind this story appears in every office, every week" — use the news as proof of a universal workplace problem
+  D) "What any professional can learn about communication timing, word choice, and clarity from this moment" — factual case-study framing
+  E) "Why smart, capable people still send terrible messages" — use the news as a springboard to explore why tone is hard even for pros
+  F) "What would happen if your manager did this in Slack?" — transpose the news scenario into a relatable office scenario
+  G) "When the same message lands differently depending on who hears it" — explore how audience shapes communication
+  PICK ONE angle. Do NOT combine all of them. Do NOT mention or label which angle you chose.` : `CREATIVE ANGLES — read all articles first, then pick ONE angle that fits the best article:
+  A) "The communication pattern behind this story appears in every office, every week" — use the news as proof of a universal workplace problem
+  B) "What this moment teaches us about tone" — treat the event as an unexpected case study
+  C) "Breaking: someone said the wrong thing. Here's the workplace version" — parallel between tech drama and everyday messages
+  D) "The real story the headline missed: a masterclass in communication clarity" — reframe the event as a communication lesson
+  E) "Why smart, capable people still send terrible messages" — use the news as a springboard to explore why tone is hard even for pros
+  F) "What would happen if your manager did this in Slack?" — transpose the news scenario into a relatable office scenario
+  PICK ONE angle. Do NOT combine all of them. Do NOT mention or label which angle you chose.`;
+
   const systemPrompt = `You are a witty, insightful content writer for Tonero — a SaaS Chrome extension.
 
 ABOUT TONERO:
@@ -270,16 +300,9 @@ ABOUT TONERO:
 - Install at tonero.app
 
 YOUR TASK:
-Write a creative, genuinely useful Tonero blog post inspired by the given news article.
+You will be given a numbered list of ${articleList.length} news article${articleList.length > 1 ? 's' : ''}. First, pick the ONE article that offers the richest workplace-communication angle. Then write a full Tonero blog post about it.${neutralityBlock}
 
-CREATIVE ANGLES — read the article first, then pick whichever single frame fits BEST and run with it fully:
-  A) "The communication pattern behind this story appears in every office, every week" — use the news as proof of a universal workplace problem
-  B) "What this public moment teaches us about tone" — treat the figure/org as an unexpected case study in what NOT to do
-  C) "Breaking: someone said the wrong thing. Here's the workplace version" — play with the parallel between headline drama and everyday email drama
-  D) "The real story the headline missed: a masterclass in tone gone wrong" — reframe the event as primarily a communication failure
-  E) "Why smart, capable people still send terrible messages" — use the news as a springboard to explore why tone is hard even for pros
-  F) "What would happen if your manager did this in Slack?" — transpose the news scenario into a relatable office scenario
-  PICK ONE angle. Do NOT combine all of them. Do NOT mention or label which angle you chose.
+${anglesBlock}
 
 MANDATORY STRUCTURE:
 1. Opening paragraph — hook using the news moment, then immediately connect it to the reader
@@ -324,14 +347,22 @@ RETURN FORMAT: Valid JSON only. No markdown fences. No extra keys.
   "body": "Full HTML body. Use <h2>, <p>, <ul><li>, <strong>, <blockquote>. NO html/head/body tags. NO inline styles. MUST contain the news-summary div. MUST end with the news-disclaimer p."
 }`;
 
-  const imageHint = article.image ? `Image URL: ${article.image}` : 'Image URL: (none found in feed)';
-  const userPrompt = `News article:
-Title: "${article.title}"
-URL:   ${article.link}
-${article.desc ? `Summary: ${article.desc.slice(0, 600)}` : ''}
-${imageHint}
+  // Build user prompt with all candidate articles listed
+  const articlePrompts = articleList.map((a, i) => {
+    const imageHint = a.image ? `\n   Image URL: ${a.image}` : '';
+    return `Article ${i + 1}:\n   Title: "${a.title}"\n   URL:   ${a.link}${a.desc ? `\n   Summary: ${a.desc.slice(0, 400)}` : ''}${imageHint}`;
+  }).join('\n\n');
 
-Choose the best creative angle for this particular story. Write the full post including the news-summary box early in the body. Replace SOURCE_TITLE and SOURCE_URL in the disclaimer with the exact values above. Put the image URL in featuredImage if one was provided.`;
+  const userPrompt = `Here are ${articleList.length} candidate article${articleList.length > 1 ? 's' : ''}. Pick the ONE with the richest workplace-communication angle, then write the full post for it.
+
+${articlePrompts}
+
+Instructions:
+- Pick the single most relevant article for a Tonero post about workplace communication
+- Choose the best creative angle
+- In the body: include the news-summary box right after the opening paragraph
+- Replace SOURCE_TITLE and SOURCE_URL in the disclaimer with the exact title/URL of the article you chose
+- Put the image URL in featuredImage if one was provided for your chosen article`;
 
   // ── Call OpenAI ────────────────────────────────────────────────────────────────
   console.log(`Calling OpenAI (${model})…`);
@@ -359,9 +390,13 @@ Choose the best creative angle for this particular story. Write the full post in
   }
 
   // ── Save ───────────────────────────────────────────────────────────────────────
-  const date     = new Date().toISOString().split('T')[0];
+  const _now     = new Date();
+  const date     = _now.toISOString().split('T')[0];
   const filename = `${date}-${post.slug}.json`;
   const outPath  = path.join(postsDir, filename);
+
+  // Resolve the primary article used (GPT may have picked from the list)
+  const primaryArticle = articleList[0];
 
   const data = {
     slug:          post.slug,
@@ -372,10 +407,11 @@ Choose the best creative angle for this particular story. Write the full post in
     emoji:         post.emoji          || '📰',
     readTime:      post.readTime       || '5 min',
     date,
+    createdAt:     _now.toISOString(),
     topicSeed:     'news-inspired',
     category:      feedCategory,
-    featuredImage: post.featuredImage  || article.image || '',
-    newsSource:    post.newsSource     || { title: article.title, url: article.link },
+    featuredImage: post.featuredImage  || primaryArticle.image || '',
+    newsSource:    post.newsSource     || { title: primaryArticle.title, url: primaryArticle.link },
     body:          post.body,
   };
 

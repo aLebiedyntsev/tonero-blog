@@ -44,7 +44,14 @@ function escJsonStr(str) {
   return String(str).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '');
 }
 
-function formatDate(dateStr) {
+function formatDate(dateStr, createdAt) {
+  // If full ISO timestamp available, show date + time
+  if (createdAt) {
+    const d = new Date(createdAt);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }) +
+           ' · ' +
+           d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
+  }
   const d = new Date(dateStr + 'T12:00:00Z');
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 }
@@ -77,6 +84,7 @@ function buildManifest(posts) {
     title: p.title,
     description: p.description,
     date: p.date,
+    createdAt: p.createdAt || null,
     tags: Array.isArray(p.tags) ? p.tags : [],
     emoji: p.emoji || '✦',
     readTime: p.readTime || '5 min',
@@ -207,7 +215,7 @@ function buildPostPage(post) {
     <div class="container">
       <div class="post-meta">
         ${tagBadges}
-        <time datetime="${escAttr(post.date)}">${formatDate(post.date)}</time>
+        <time datetime="${escAttr(post.createdAt || post.date)}">${formatDate(post.date, post.createdAt)}</time>
         <span class="post-read-time">· ${escHtml(post.readTime)} read</span>
       </div>
       <h1>${escHtml(post.emoji)} ${escHtml(post.title)}</h1>
