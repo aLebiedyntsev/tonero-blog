@@ -44,8 +44,7 @@ You can optionally supply a `topic_override` to specify the exact topic.
 
 | Secret | Description |
 |--------|-------------|
-| `OPENAI_API_KEY` | OpenAI API key |
-| `GH_PAT` | Personal access token with `repo` scope (to push commits back) |
+| `OPENAI_API_KEY` | OpenAI API key (same one used by tonero-api) |
 | `DEPLOY_SSH_KEY` | Private SSH key for `root@<server>` |
 | `SERVER_HOST` | Server IP or hostname |
 | `CLOUDFLARE_API_TOKEN` | CF token with Zone:Cache Purge for tonero.app |

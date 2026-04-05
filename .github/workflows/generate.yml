@@ -12,6 +12,9 @@ on:
         required: false
         default: ''
 
+permissions:
+  contents: write   # allows the workflow to commit + push the new post JSON
+
 jobs:
   generate-and-deploy:
     runs-on: ubuntu-latest
@@ -21,8 +24,6 @@ jobs:
       # ── Checkout ────────────────────────────────────────────────────────────
       - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GH_PAT }}
 
       # ── Node.js setup ────────────────────────────────────────────────────────
       - name: Set up Node.js
