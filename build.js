@@ -274,6 +274,17 @@ function buildPostPage(post) {
     </div>
   </footer>
 
+  <script>
+    (function () {
+      var slug = ${JSON.stringify(post.slug)};
+      if (!slug) return;
+      // Fire read beacon once per page load (fire-and-forget, silent on error)
+      fetch('https://api.tonero.app/public/blog/' + encodeURIComponent(slug) + '/read', {
+        method: 'POST', keepalive: true,
+      }).catch(function () {});
+    }());
+  </script>
+
 </body>
 </html>`;
 }
