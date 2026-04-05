@@ -54,6 +54,120 @@ const TOPICS = [
   'Why one poorly worded message can undo months of trust at work',
 ];
 
+// ── Length buckets ────────────────────────────────────────────────────────────
+const LENGTH_BUCKETS = [
+  { label: 'short',  words: '550–750',   readTime: '3–4' },
+  { label: 'medium', words: '950–1250',  readTime: '5–6' },
+  { label: 'long',   words: '1500–2000', readTime: '8–10' },
+];
+
+// ── Rewrite existing post ─────────────────────────────────────────────────────
+async function rewriteExisting(client, postsDir) {
+  const filename     = process.env.REWRITE_FILE.trim();
+  const reviewerNote = (process.env.REVIEWER_NOTE || '').trim();
+  const model        = (process.env.MODEL_OVERRIDE || 'gpt-4o-mini').trim();
+
+  const filepath = path.join(postsDir, filename);
+  if (!fs.existsSync(filepath)) {
+    console.error(`ERROR: File not found: posts/${filename}`);
+    process.exit(1);
+  }
+
+  const original = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+  const bucket   = LENGTH_BUCKETS[Math.floor(Math.random() * LENGTH_BUCKETS.length)];
+
+  const systemPrompt = `You are a senior content writer for Tonero, a SaaS Chrome extension.
+
+ABOUT TONERO:
+- Chrome extension that adds a one-click tone rewriting toolbar to every text box
+- Works in Slack, Gmail, Microsoft Teams, LinkedIn, and any website
+- Rewrites messages into: Professional, Direct, Casual, Friendly, Emoji, or a custom "My Voice" profile
+- Free plan: 30 rewrites/month with 3 core tones
+- Pro plan: $9/month — unlimited rewrites, 6 tones, custom voice profiles, personalization
+- Install at tonero.app
+
+YOUR TASK:
+Rewrite the provided blog post based on reviewer feedback. Keep the same core topic and Tonero angle.
+1. Address the reviewer's feedback precisely — this is the PRIMARY requirement
+2. Keep the same SEO keyword targets and punchy headline style
+3. Preserve Tonero mentions naturally in the body (2–3 times)
+4. Keep the CTA at the end pointing to tonero.app
+5. Is ${bucket.words} words in the body HTML — a ${bucket.label} post (approx ${bucket.readTime} min read)
+
+TONE & STYLE:
+- Direct, confident, slightly provocative
+- Use "you" throughout
+- Cite plausible stats when they support the point
+- No vague corporate advice — be specific and opinionated
+
+RETURN FORMAT: Valid JSON only. No markdown, no code fences.
+{
+  "title": "Headline 50-65 chars",
+  "description": "Meta description 140-156 chars",
+  "tags": ["tag1", "tag2", "tag3"],
+  "keywords": ["kw1", "kw2", "kw3", "kw4", "kw5"],
+  "emoji": "single emoji",
+  "readTime": "N min",
+  "body": "Full HTML body. Use <h2>, <p>, <ul><li>, <strong>, <blockquote>. NO html/head/body tags. NO inline styles."
+}`;
+
+  const userPrompt = `ORIGINAL POST:
+Title: ${original.title}
+Body:
+${original.body}
+
+REVIEWER FEEDBACK:
+"${reviewerNote}"
+
+Rewrite the post fully, addressing the reviewer's feedback. Return the specified JSON format.`;
+
+  console.log(`Rewriting: posts/${filename}`);
+  console.log(`Reviewer: "${reviewerNote.slice(0, 80)}"`);
+  console.log(`Calling OpenAI (${model})…`);
+
+  let post;
+  try {
+    const completion = await client.chat.completions.create({
+      model,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userPrompt },
+      ],
+      temperature: 0.82,
+      max_tokens: 4096,
+    });
+    post = JSON.parse(completion.choices[0].message.content);
+  } catch (err) {
+    console.error('OpenAI error:', err.message);
+    process.exit(1);
+  }
+
+  if (!post.body || !post.title) {
+    console.error('ERROR: Rewrite response missing title or body');
+    process.exit(1);
+  }
+
+  const updated = {
+    ...original,
+    title:        post.title       || original.title,
+    description:  post.description || original.description,
+    tags:         Array.isArray(post.tags)     ? post.tags     : original.tags,
+    keywords:     Array.isArray(post.keywords) ? post.keywords : (original.keywords || []),
+    emoji:        post.emoji    || original.emoji,
+    readTime:     post.readTime || original.readTime,
+    body:         post.body,
+    reviewerNote: reviewerNote,
+    updatedAt:    new Date().toISOString(),
+  };
+
+  fs.writeFileSync(filepath, JSON.stringify(updated, null, 2));
+  console.log(`Saved (rewrite): posts/${filename}`);
+  console.log(`  Title    : ${updated.title}`);
+  console.log(`  Read time: ${updated.readTime}`);
+  console.log(`  Body len : ${updated.body.length} chars`);
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function generate() {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -66,6 +180,12 @@ async function generate() {
 
   const postsDir = path.join(__dirname, 'posts');
   if (!fs.existsSync(postsDir)) fs.mkdirSync(postsDir, { recursive: true });
+
+  // ── Rewrite mode ───────────────────────────────────────────────────────────
+  if (process.env.REWRITE_FILE) {
+    await rewriteExisting(client, postsDir);
+    return;
+  }
 
   // Read topics already covered so we don't repeat
   const existingFiles = fs.readdirSync(postsDir).filter(f => f.endsWith('.json'));
@@ -90,6 +210,8 @@ async function generate() {
     console.log(`Selected topic: "${topic}"`);
   }
 
+  const bucket = LENGTH_BUCKETS[Math.floor(Math.random() * LENGTH_BUCKETS.length)];
+
   // ── System prompt ──────────────────────────────────────────────────────────
   const systemPrompt = `You are a senior content writer for Tonero, a SaaS Chrome extension.
 
@@ -109,7 +231,7 @@ Write a blog post that:
 3. Is genuinely useful — gives actionable, specific tips (not vague advice)
 4. Mentions Tonero naturally in the body (2-3 times) as a tool the writer uses/recommends
 5. Ends with a natural CTA to try Tonero free at tonero.app
-6. Is 950–1200 words in the body HTML
+6. Is ${bucket.words} words in the body HTML — a ${bucket.label} post (approx ${bucket.readTime} min read)
 
 TONE & STYLE:
 - Direct, confident, slightly provocative

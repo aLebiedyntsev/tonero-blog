@@ -65,7 +65,12 @@ const TECH_FEEDS = [
 
 // All feeds combined, for FEED_ID lookup
 const ALL_FEEDS = [...WORLD_FEEDS, ...TECH_FEEDS];
-
+// ── Length buckets ───────────────────────────────────────────────────────────
+const LENGTH_BUCKETS = [
+  { label: 'short',  words: '550–750',   readTime: '3–4' },
+  { label: 'medium', words: '900–1100',  readTime: '5–6' },
+  { label: 'long',   words: '1400–1900', readTime: '7–10' },
+];
 // ── Content filters ────────────────────────────────────────────────────────────
 // Articles matching these keywords are skipped — we want nothing about violence, war, death.
 const EXCLUDE_RE = /\b(kill(ed|ing|s)?|murder(ed|ing|s|er)?|shoot(ing|er|s)?|shot\s+dead|war(fare|time)?|bomb(ing|ed|s|er)?|missile(s)?|terrorist(s|ism|ist)?|genocide|massacre|casualt(y|ies)|hostage(s)?|explosion(s)?|died\s+in|death\s+toll|attack(ed|s|er|ers)?\s+by|execut(ed|ion|ions)|suicide\s+(bomb|attack)|troops|military\s+(strike|action)|armed\s+conflict)\b/i;
@@ -289,6 +294,8 @@ POLITICAL NEUTRALITY — MANDATORY:
   F) "What would happen if your manager did this in Slack?" — transpose the news scenario into a relatable office scenario
   PICK ONE angle. Do NOT combine all of them. Do NOT mention or label which angle you chose.`;
 
+  const bucket = LENGTH_BUCKETS[Math.floor(Math.random() * LENGTH_BUCKETS.length)];
+
   const systemPrompt = `You are a witty, insightful content writer for Tonero — a SaaS Chrome extension.
 
 ABOUT TONERO:
@@ -314,7 +321,7 @@ MANDATORY STRUCTURE:
 6. Closing CTA paragraph encouraging readers to try Tonero free at tonero.app
 7. FINAL element — news disclaimer (must be the last thing in body):
    <p class="news-disclaimer">Inspired by <a href="SOURCE_URL" target="_blank" rel="noopener noreferrer">SOURCE_TITLE</a>. We took the communication angle — kind of what Tonero does, but with words rather than people.</p>
-8. Total body 900–1100 words
+8. Total body ${bucket.words} words — a ${bucket.label} post (approx ${bucket.readTime} min read)
 
 IMAGE:
 - If an imageUrl is provided in the article data, put it in the featuredImage field
