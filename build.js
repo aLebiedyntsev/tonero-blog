@@ -195,12 +195,12 @@ function buildPostPage(post) {
   <!-- ── NAV ── -->
   <nav class="nav">
     <div class="container nav__inner">
-      <a href="../index.html" class="logo">
+      <a href="/" class="logo">
         <img src="../images/logo-mark.svg" alt="" class="logo-icon"> Tonero
       </a>
       <ul class="nav__links">
-        <li><a href="../index.html#how">How it works</a></li>
-        <li><a href="../index.html#pricing">Pricing</a></li>
+        <li><a href="/#how">How it works</a></li>
+        <li><a href="/#pricing">Pricing</a></li>
         <li><a href="../blog.html">Blog</a></li>
       </ul>
       <div class="nav__auth">
@@ -245,7 +245,7 @@ function buildPostPage(post) {
   <footer class="footer">
     <div class="container footer__inner">
       <div class="footer__brand">
-        <a href="../index.html" class="logo">
+        <a href="/" class="logo">
           <img src="../images/logo-mark.svg" alt="" class="logo-icon"> Tonero
         </a>
         <p>Write better. Sound smarter. Every time.</p>
@@ -253,8 +253,8 @@ function buildPostPage(post) {
       <div class="footer__links">
         <div class="footer__col">
           <strong>Product</strong>
-          <a href="../index.html#how">How it works</a>
-          <a href="../index.html#pricing">Pricing</a>
+          <a href="/#how">How it works</a>
+          <a href="/#pricing">Pricing</a>
         </div>
         <div class="footer__col">
           <strong>Company</strong>
