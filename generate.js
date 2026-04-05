@@ -139,15 +139,16 @@ RETURN FORMAT: Valid JSON only. No markdown, no code fences.
 }`;
 
   const userPrompt = `Write a blog post about: "${topic}"
-
+${process.env.TAGS_INPUT ? `\nTarget SEO keywords — include naturally in content and return in the tags array: ${process.env.TAGS_INPUT.trim()}` : ''}
 Make sure the title is phrased to attract clicks from Google — someone searching for Slack/email/communication advice must want to click it.`;
 
   // ── Call OpenAI ────────────────────────────────────────────────────────────
-  console.log('Calling OpenAI (gpt-4o)…');
+  const model = (process.env.MODEL_OVERRIDE || 'gpt-4o').trim();
+  console.log(`Calling OpenAI (${model})…`);
   let post;
   try {
     const completion = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: systemPrompt },
