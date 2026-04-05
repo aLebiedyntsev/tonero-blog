@@ -132,6 +132,7 @@ RETURN FORMAT: Valid JSON only. No markdown, no code fences.
   "title": "Headline 50-65 chars — attention-grabbing and SEO keyword-rich",
   "description": "Meta description 140-156 chars — what the reader will learn, with a hook",
   "tags": ["tag1", "tag2", "tag3"],
+  "keywords": ["seo keyword 1", "seo keyword 2", "seo keyword 3", "seo keyword 4", "seo keyword 5"],
   "emoji": "single emoji that represents the post",
   "readTime": "N min",
   "topicSeed": "the exact topic string you were given",
@@ -182,6 +183,7 @@ Make sure the title is phrased to attract clicks from Google — someone searchi
 
   post.date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
   post.topicSeed = topic;
+  post.keywords  = Array.isArray(post.keywords) ? post.keywords : [];
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const filename = `${post.date}-${post.slug}.json`;

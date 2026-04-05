@@ -11,6 +11,10 @@ on:
         description: 'Optional: override the topic (leave blank for random)'
         required: false
         default: ''
+      mode:
+        description: 'Generation mode: ai | rss | random (default: random)'
+        required: false
+        default: 'random'
 
 permissions:
   contents: write   # allows the workflow to commit + push the new post JSON
@@ -40,7 +44,23 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TOPIC_OVERRIDE: ${{ github.event.inputs.topic_override }}
-        run: node generate.js
+          MODE_OVERRIDE:  ${{ github.event.inputs.mode }}
+        run: |
+          # Determine mode: explicit override > random 50/50 on schedule
+          MODE="${MODE_OVERRIDE:-random}"
+          if [ "$MODE" = "random" ]; then
+            RAND=$((RANDOM % 2))
+            if [ "$RAND" -eq 0 ]; then MODE="rss"; else MODE="ai"; fi
+            echo "Randomly selected mode: $MODE"
+          fi
+
+          if [ "$MODE" = "rss" ]; then
+            echo "Running generate-news.js (RSS mode)…"
+            node generate-news.js
+          else
+            echo "Running generate.js (AI topic mode)…"
+            node generate.js
+          fi
 
       # ── Commit new post JSON ─────────────────────────────────────────────────
       - name: Commit new post

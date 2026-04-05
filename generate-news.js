@@ -262,6 +262,11 @@ IMAGE:
 - If an imageUrl is provided in the article data, put it in the featuredImage field
 - Do NOT embed <img> tags in the body — the template places the hero image separately
 
+KEYWORDS:
+- Extract 4–6 SEO keywords from the article content (names, topics, key phrases)
+- Add 2–3 workplace communication keywords ("tone", "Slack", "email tone", etc.)
+- Return all combined in the keywords array
+
 TONE & STYLE:
 - Warm, witty, clever — never cynical, partisan, or mean
 - "You" voice throughout — make the reader feel seen
@@ -275,6 +280,7 @@ RETURN FORMAT: Valid JSON only. No markdown fences. No extra keys.
   "title": "Headline 50–65 chars — workplace angle, not the politics",
   "description": "Meta description 140–156 chars",
   "tags": ["tag1", "tag2", "tag3", "tag4"],
+  "keywords": ["keyword from article 1", "keyword from article 2", "workplace keyword 3", "keyword 4", "keyword 5"],
   "emoji": "single emoji",
   "readTime": "N min",
   "topicSeed": "news-inspired",
@@ -327,6 +333,7 @@ Choose the best creative angle for this particular story. Write the full post in
     title:         post.title,
     description:   post.description || '',
     tags:          Array.isArray(post.tags) ? post.tags : [],
+    keywords:      Array.isArray(post.keywords) ? post.keywords : [],
     emoji:         post.emoji          || '📰',
     readTime:      post.readTime       || '5 min',
     date,

@@ -113,6 +113,7 @@ function buildPostPage(post) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${escAttr(post.title)} – Tonero Blog</title>
   <meta name="description" content="${escAttr(post.description)}" />
+  ${(post.keywords && post.keywords.length > 0) ? `<meta name="keywords" content="${escAttr([...(post.keywords||[]), ...(tags||[])].join(', '))}" />` : ''}
   <link rel="canonical" href="https://tonero.app/posts/${escAttr(post.slug)}.html" />
   <meta property="og:type" content="article" />
   <meta property="og:url" content="https://tonero.app/posts/${escAttr(post.slug)}.html" />
