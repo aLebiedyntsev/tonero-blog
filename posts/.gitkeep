@@ -1,0 +1,3 @@
+# posts directory — keep this file so git tracks the empty directory
+# JSON post files are committed here (one per generated post)
+# Filename format: YYYY-MM-DD-slug.json

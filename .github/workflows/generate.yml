@@ -1,0 +1,105 @@
+name: Generate Blog Post
+
+# Runs twice a week (Mon & Thu at 09:00 UTC) and can be triggered manually.
+on:
+  schedule:
+    - cron: '0 9 * * 1'   # Monday 09:00 UTC
+    - cron: '0 9 * * 4'   # Thursday 09:00 UTC
+  workflow_dispatch:
+    inputs:
+      topic_override:
+        description: 'Optional: override the topic (leave blank for random)'
+        required: false
+        default: ''
+
+jobs:
+  generate-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      # ── Node.js setup ────────────────────────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ── Generate post ────────────────────────────────────────────────────────
+      - name: Generate blog post
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOPIC_OVERRIDE: ${{ github.event.inputs.topic_override }}
+        run: node generate.js
+
+      # ── Commit new post JSON ─────────────────────────────────────────────────
+      - name: Commit new post
+        run: |
+          git config user.name  "Tonero Bot"
+          git config user.email "bot@tonero.app"
+          git add posts/
+          # Only commit if there's something new
+          git diff --cached --quiet || git commit -m "blog: add generated post $(date +%Y-%m-%d)"
+
+      - name: Push changes
+        run: git push origin main
+
+      # ── Deploy to server ─────────────────────────────────────────────────────
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Add server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy posts to server
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+        run: |
+          ssh root@${SERVER_HOST} "
+            set -e
+
+            # Clone tonero-blog if first run
+            if [ ! -d '/opt/tonero/tonero-blog' ]; then
+              echo 'First run — cloning tonero-blog…'
+              cd /opt/tonero
+              git clone git@github.com:aLebiedyntsev/tonero-blog.git tonero-blog
+            fi
+
+            # Pull latest
+            cd /opt/tonero/tonero-blog
+            git pull origin main
+
+            # Install deps and build
+            npm ci --omit=dev
+            node build.js
+
+            # Copy posts into tonero-web
+            mkdir -p /opt/tonero/tonero-web/posts
+            rsync -a --delete public/posts/ /opt/tonero/tonero-web/posts/
+
+            echo 'Deploy complete'
+          "
+
+      # ── Purge Cloudflare cache for /posts/* ──────────────────────────────────
+      - name: Purge Cloudflare cache
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          curl -s -X POST "https://api.cloudflare.com/client/v4/zones/dcfe962acc6c94f3d9d0d01da03c8d6e/purge_cache" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '{"files":["https://tonero.app/posts/manifest.js","https://tonero.app/blog.html","https://tonero.app/"]}' \
+            | grep -o '"success":[^,}]*'
