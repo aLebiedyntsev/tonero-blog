@@ -120,6 +120,28 @@ function extractLink(itemXml) {
   return '';
 }
 
+function extractImage(itemXml) {
+  // media:content with image medium or type
+  let m = itemXml.match(/<media:content[^>]+url="([^"]+)"[^>]*medium="image"[^>]*\/?>/i);
+  if (!m) m = itemXml.match(/<media:content[^>]+medium="image"[^>]+url="([^"]+)"[^>]*\/?>/i);
+  if (!m) m = itemXml.match(/<media:content[^>]+url="([^"]+)"[^>]*type="image\/[^"]*"[^>]*\/?>/i);
+  if (!m) m = itemXml.match(/<media:content[^>]+type="image\/[^"]*"[^>]+url="([^"]+)"[^>]*\/?>/i);
+  // Any media:content with a url (fallback)
+  if (!m) m = itemXml.match(/<media:content[^>]+url="([^"]+)"/i);
+  if (m) return m[1].trim();
+  // media:thumbnail
+  m = itemXml.match(/<media:thumbnail[^>]+url="([^"]+)"/i);
+  if (m) return m[1].trim();
+  // enclosure with image type
+  m = itemXml.match(/<enclosure[^>]+url="([^"]+)"[^>]+type="image\/[^"]*"/i);
+  if (!m) m = itemXml.match(/<enclosure[^>]+type="image\/[^"]*"[^>]+url="([^"]+)"/i);
+  if (m) return m[1].trim();
+  // <img src> inside description/content CDATA
+  m = itemXml.match(/<img[^>]+src="([^"]+)"/i);
+  if (m) return m[1].trim();
+  return '';
+}
+
 function parseItems(xml) {
   const items = [];
   // Support both RSS <item> and Atom <entry>
@@ -132,7 +154,8 @@ function parseItems(xml) {
     const desc  = extractTag(body, 'description') ||
                   extractTag(body, 'summary')     ||
                   extractTag(body, 'content');
-    if (title && link) items.push({ title, link, desc });
+    const image = extractImage(body);
+    if (title && link) items.push({ title, link, desc, image });
   }
   return items;
 }
@@ -201,61 +224,73 @@ async function main() {
   }
 
   // ── Build prompt ──────────────────────────────────────────────────────────────
-  const systemPrompt = `You are a witty, creative content writer for Tonero, a SaaS Chrome extension.
+  const systemPrompt = `You are a witty, insightful content writer for Tonero — a SaaS Chrome extension.
 
 ABOUT TONERO:
 - Chrome extension that adds a one-click tone rewriting toolbar to every text box
-- Works in Slack, Gmail, Microsoft Teams, LinkedIn, and any website
+- Works in Slack, Gmail, Microsoft Teams, LinkedIn, Notion, and any website
 - Rewrites messages into: Professional, Direct, Casual, Friendly, Emoji, or a custom "My Voice" profile
 - Free plan: 30 rewrites/month with 3 core tones
 - Pro plan: $9/month — unlimited rewrites, 6 tones, custom voice profiles, personalization
 - Install at tonero.app
 
 YOUR TASK:
-Write a humorous, insightful Tonero blog post inspired by the given news article:
+Write a creative, genuinely useful Tonero blog post inspired by the given news article.
 
-1. Spin the story around communication and tone — not politics or the actual news event
-2. The angle: "If only [person/organisation in the news] had used Tonero, this could have gone very differently"
-3. Be playful and self-aware — never mean, partisan, or political
-4. Keep the focus on what YOUR READERS face at work: bad emails, aggressive Slack messages, tone-deaf announcements
-5. Mention Tonero naturally 2–3 times (not forced)
-6. End with a CTA to try Tonero free at tonero.app
-7. Body should be 850–1100 words
-8. REQUIRED: Include a news disclaimer block at the very end (exact HTML below — fill in SOURCE_TITLE and SOURCE_URL):
+CREATIVE ANGLES — read the article first, then pick whichever single frame fits BEST and run with it fully:
+  A) "The communication pattern behind this story appears in every office, every week" — use the news as proof of a universal workplace problem
+  B) "What this public moment teaches us about tone" — treat the figure/org as an unexpected case study in what NOT to do
+  C) "Breaking: someone said the wrong thing. Here's the workplace version" — play with the parallel between headline drama and everyday email drama
+  D) "The real story the headline missed: a masterclass in tone gone wrong" — reframe the event as primarily a communication failure
+  E) "Why smart, capable people still send terrible messages" — use the news as a springboard to explore why tone is hard even for pros
+  F) "What would happen if your manager did this in Slack?" — transpose the news scenario into a relatable office scenario
+  PICK ONE angle. Do NOT combine all of them. Do NOT mention or label which angle you chose.
+
+MANDATORY STRUCTURE:
+1. Opening paragraph — hook using the news moment, then immediately connect it to the reader
+2. NEWS SUMMARY BOX — right after the opening paragraph:
+   <div class="news-summary"><strong>Quick context:</strong> [2–3 sentences: neutral factual summary of what the article is about — no opinion]</div>
+3. Pivot to the reader's own professional communication life within 3 paragraphs
+4. 3–4 <h2> sections with practical, actionable insight about workplace communication
+5. Natural Tonero mention 2–3 times — helpful context, never forced ad copy
+6. Closing CTA paragraph encouraging readers to try Tonero free at tonero.app
+7. FINAL element — news disclaimer (must be the last thing in body):
    <p class="news-disclaimer">Inspired by <a href="SOURCE_URL" target="_blank" rel="noopener noreferrer">SOURCE_TITLE</a>. We took the communication angle — kind of what Tonero does, but with words rather than people.</p>
+8. Total body 900–1100 words
+
+IMAGE:
+- If an imageUrl is provided in the article data, put it in the featuredImage field
+- Do NOT embed <img> tags in the body — the template places the hero image separately
 
 TONE & STYLE:
-- Witty, warm, and clever — not cynical or mean
-- Use "you" throughout — make the reader feel seen
-- Concrete workplace scenarios (Slack, email, meetings)
-- Cite plausible-sounding stats if helpful
-
-STRUCTURE:
-1. Hook: reference the news moment, then immediately pivot to the reader's experience
-2. Why this communication pattern keeps appearing (root cause)
-3. Real costs at the workplace level (3-4 paragraphs with <h2> headings)
-4. Where Tonero fits — presented helpfully, not as an ad
-5. Closing CTA + news disclaimer
+- Warm, witty, clever — never cynical, partisan, or mean
+- "You" voice throughout — make the reader feel seen
+- Use real tool names: Slack, Gmail, Teams, LinkedIn, Notion
+- Short punchy sentences mixed with fuller analytical ones
+- Plausible-sounding stats are fine if they support the point
 
 RETURN FORMAT: Valid JSON only. No markdown fences. No extra keys.
 {
   "slug": "url-slug-max-65-chars-lowercase-hyphenated",
-  "title": "Headline 50–65 chars — communicate the workplace angle, not the politics",
+  "title": "Headline 50–65 chars — workplace angle, not the politics",
   "description": "Meta description 140–156 chars",
   "tags": ["tag1", "tag2", "tag3", "tag4"],
   "emoji": "single emoji",
   "readTime": "N min",
   "topicSeed": "news-inspired",
+  "featuredImage": "image url or empty string",
   "newsSource": { "title": "EXACT original article title", "url": "EXACT article url" },
-  "body": "Full HTML. Use <h2>, <p>, <ul><li>, <strong>, <blockquote>. NO html/head/body tags. NO inline styles. Must end with the news-disclaimer <p>."
+  "body": "Full HTML body. Use <h2>, <p>, <ul><li>, <strong>, <blockquote>. NO html/head/body tags. NO inline styles. MUST contain the news-summary div. MUST end with the news-disclaimer p."
 }`;
 
+  const imageHint = article.image ? `Image URL: ${article.image}` : 'Image URL: (none found in feed)';
   const userPrompt = `News article:
 Title: "${article.title}"
 URL:   ${article.link}
-${article.desc ? `Summary: ${article.desc.slice(0, 500)}` : ''}
+${article.desc ? `Summary: ${article.desc.slice(0, 600)}` : ''}
+${imageHint}
 
-Write the Tonero blog post. Pivot quickly from the news hook to what professionals experience every day. Keep it funny and communication-focused. In the disclaimer paragraph replace SOURCE_TITLE with the exact article title and SOURCE_URL with its URL.`;
+Choose the best creative angle for this particular story. Write the full post including the news-summary box early in the body. Replace SOURCE_TITLE and SOURCE_URL in the disclaimer with the exact values above. Put the image URL in featuredImage if one was provided.`;
 
   // ── Call OpenAI ────────────────────────────────────────────────────────────────
   console.log(`Calling OpenAI (${model})…`);
@@ -288,16 +323,17 @@ Write the Tonero blog post. Pivot quickly from the news hook to what professiona
   const outPath  = path.join(postsDir, filename);
 
   const data = {
-    slug:        post.slug,
-    title:       post.title,
-    description: post.description || '',
-    tags:        Array.isArray(post.tags) ? post.tags : [],
-    emoji:       post.emoji       || '📰',
-    readTime:    post.readTime    || '5 min',
+    slug:          post.slug,
+    title:         post.title,
+    description:   post.description || '',
+    tags:          Array.isArray(post.tags) ? post.tags : [],
+    emoji:         post.emoji          || '📰',
+    readTime:      post.readTime       || '5 min',
     date,
-    topicSeed:   'news-inspired',
-    newsSource:  post.newsSource  || { title: article.title, url: article.link },
-    body:        post.body,
+    topicSeed:     'news-inspired',
+    featuredImage: post.featuredImage  || article.image || '',
+    newsSource:    post.newsSource     || { title: article.title, url: article.link },
+    body:          post.body,
   };
 
   fs.writeFileSync(outPath, JSON.stringify(data, null, 2), 'utf8');

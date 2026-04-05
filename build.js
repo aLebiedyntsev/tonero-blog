@@ -118,7 +118,7 @@ function buildPostPage(post) {
   <meta property="og:url" content="https://tonero.app/posts/${escAttr(post.slug)}.html" />
   <meta property="og:title" content="${escAttr(post.title)}" />
   <meta property="og:description" content="${escAttr(post.description)}" />
-  <meta property="og:image" content="https://tonero.app/og-image.png" />
+  <meta property="og:image" content="${escAttr(post.featuredImage || 'https://tonero.app/og-image.png')}" />
   <meta property="article:published_time" content="${escAttr(post.date)}T00:00:00Z" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${escAttr(post.title)}" />
@@ -167,6 +167,18 @@ function buildPostPage(post) {
     .post-nav { margin-top: 56px; padding-top: 32px; border-top: 1px solid var(--border); }
     .post-nav a { color: var(--brand); font-weight: 600; text-decoration: none; }
     .post-nav a:hover { text-decoration: underline; }
+    .post-featured-image { width: 100%; max-height: 420px; object-fit: cover; border-radius: 16px; margin-bottom: 40px; display: block; }
+    .news-summary {
+      background: var(--surface); border-left: 3px solid var(--brand);
+      border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 0 0 28px;
+      font-size: 0.9375rem; line-height: 1.7; color: var(--text-muted);
+    }
+    .news-summary strong { color: var(--text); }
+    .news-disclaimer {
+      margin-top: 48px; font-size: 0.8125rem; color: var(--text-muted);
+      border-top: 1px solid var(--border); padding-top: 16px; line-height: 1.6;
+    }
+    .news-disclaimer a { color: var(--brand); }
   </style>
 </head>
 <body>
@@ -206,6 +218,7 @@ function buildPostPage(post) {
   <div class="post-body">
     <div class="container">
       <div class="post-content">
+        ${post.featuredImage ? `<img src="${escAttr(post.featuredImage)}" alt="${escAttr(post.title)}" class="post-featured-image" loading="lazy" />` : ''}
         ${post.body}
         <div class="post-cta">
           <h3>Stop guessing — let Tonero fix your tone in one click</h3>
