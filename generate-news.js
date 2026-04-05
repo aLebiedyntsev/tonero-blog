@@ -83,6 +83,61 @@ function commScore(text) {
   return m ? m.length : 0;
 }
 
+// ── Article body extraction ────────────────────────────────────────────────────
+// Fetches an article URL and returns up to 6 key sentences from the body text.
+// Fails silently — never throws, returns [] on any failure.
+async function fetchArticleKeyPhrases(url) {
+  try {
+    const html = await Promise.race([
+      fetchUrl(url),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000)),
+    ]);
+
+    // Strip scripts, styles, nav-like elements, then all tags
+    const cleaned = html
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<(nav|header|footer|aside|form|figure|figcaption|button|select|option|label|input|textarea|noscript|iframe)[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&[a-z#0-9]+;/gi, s => {
+        const map = { '&amp;':'&','&lt;':'<','&gt;':'>','&quot;':'"','&apos;':"'",'&nbsp;':' ' };
+        return map[s.toLowerCase()] || ' ';
+      })
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Split on sentence-ending punctuation followed by whitespace
+    const sentences = cleaned
+      .split(/(?<=[.!?])\s+/)
+      .map(s => s.trim())
+      .filter(s => s.length >= 55 && s.length <= 380)
+      .filter(s => {
+        // Skip boilerplate
+        if (/subscribe|cookie|click here|sign up|newsletter|©|copyright|all rights reserved|privacy policy|terms of service|advertisement|share this|read more|follow us/i.test(s)) return false;
+        // Must start with a capital letter / looks like real prose
+        if (!/^[A-Z"']/.test(s)) return false;
+        return true;
+      });
+
+    if (sentences.length === 0) return [];
+
+    // Skip the first ~15% of sentences (usually nav/hero boilerplate)
+    const startIdx = Math.min(15, Math.floor(sentences.length * 0.15));
+    const body = sentences.slice(startIdx);
+    const pool = body.length >= 6 ? body : sentences;
+
+    // Pick up to 6 evenly-spaced sentences from the body
+    const picks = [];
+    const step = Math.max(1, Math.floor(pool.length / 6));
+    for (let i = 0; i < pool.length && picks.length < 6; i += step) {
+      picks.push(pool[i]);
+    }
+    return picks;
+  } catch {
+    return [];
+  }
+}
+
 // ── HTTP fetch with redirect following ────────────────────────────────────────
 function fetchUrl(url, redirectsLeft) {
   if (redirectsLeft === undefined) redirectsLeft = 8;
@@ -260,6 +315,17 @@ async function main() {
       process.exit(1);
     }
 
+    // Enrich the top-3 candidates with body key phrases (parallel, best-effort, 12s timeout each)
+    console.log(`Fetching article bodies for top-${Math.min(3, candidates.length)} candidates…`);
+    await Promise.all(candidates.slice(0, Math.min(3, candidates.length)).map(async cand => {
+      cand.keyPhrases = await fetchArticleKeyPhrases(cand.link);
+      if (cand.keyPhrases.length > 0) {
+        console.log(`  ✓ ${cand.keyPhrases.length} phrases extracted: "${cand.title.slice(0, 55)}…"`);
+      } else {
+        console.log(`  - No phrases (gated/timeout): "${cand.title.slice(0, 55)}…"`);
+      }
+    }));
+
     // article will be resolved from top-10 list by GPT
     article = candidates; // array; main() will handle both array and single-article cases
     console.log(`Top-${candidates.length} candidates collected`);
@@ -339,6 +405,13 @@ TONE & STYLE:
 - Short punchy sentences mixed with fuller analytical ones
 - Plausible-sounding stats are fine if they support the point
 
+KEY EXTRACTS (if provided for an article):
+- The article may include "Key extracts from article body" — real sentences pulled from the source
+- Weave 2–3 of them naturally into your post — do NOT quote verbatim; paraphrase or build on them
+- Use them as evidence, illustration, or a springboard for your insight
+- Place them inside body paragraphs, not as standalone block quotes
+- These make the post feel grounded, like the author actually read the full article
+
 RETURN FORMAT: Valid JSON only. No markdown fences. No extra keys.
 {
   "slug": "url-slug-max-65-chars-lowercase-hyphenated",
@@ -356,8 +429,11 @@ RETURN FORMAT: Valid JSON only. No markdown fences. No extra keys.
 
   // Build user prompt with all candidate articles listed
   const articlePrompts = articleList.map((a, i) => {
-    const imageHint = a.image ? `\n   Image URL: ${a.image}` : '';
-    return `Article ${i + 1}:\n   Title: "${a.title}"\n   URL:   ${a.link}${a.desc ? `\n   Summary: ${a.desc.slice(0, 400)}` : ''}${imageHint}`;
+    const imageHint   = a.image ? `\n   Image URL: ${a.image}` : '';
+    const phrasesHint = (a.keyPhrases && a.keyPhrases.length > 0)
+      ? `\n   Key extracts from article body:\n${a.keyPhrases.map(p => `     · "${p}"`).join('\n')}`
+      : '';
+    return `Article ${i + 1}:\n   Title: "${a.title}"\n   URL:   ${a.link}${a.desc ? `\n   RSS summary: ${a.desc.slice(0, 400)}` : ''}${phrasesHint}${imageHint}`;
   }).join('\n\n');
 
   const userPrompt = `Here are ${articleList.length} candidate article${articleList.length > 1 ? 's' : ''}. Pick the ONE with the richest workplace-communication angle, then write the full post for it.

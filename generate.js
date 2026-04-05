@@ -67,7 +67,11 @@ async function rewriteExisting(client, postsDir) {
   const reviewerNote = (process.env.REVIEWER_NOTE || '').trim();
   const model        = (process.env.MODEL_OVERRIDE || 'gpt-4o-mini').trim();
 
-  const filepath = path.join(postsDir, filename);
+  const filepath = path.resolve(postsDir, filename);
+  if (!filepath.startsWith(postsDir + path.sep)) {
+    console.error(`ERROR: Path traversal detected in REWRITE_FILE: ${filename}`);
+    process.exit(1);
+  }
   if (!fs.existsSync(filepath)) {
     console.error(`ERROR: File not found: posts/${filename}`);
     process.exit(1);
