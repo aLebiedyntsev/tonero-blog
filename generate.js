@@ -147,14 +147,14 @@ Make sure the title is phrased to attract clicks from Google — someone searchi
   let post;
   try {
     const completion = await client.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-4o-mini',
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.82,
-      max_tokens: 4000,
+      max_tokens: 4096,
     });
     post = JSON.parse(completion.choices[0].message.content);
   } catch (err) {
