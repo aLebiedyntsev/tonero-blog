@@ -15,6 +15,10 @@ on:
         description: 'Generation mode: ai | rss | random (default: random)'
         required: false
         default: 'random'
+      category:
+        description: 'RSS feed category: world | tech | random (default: random, only for rss/random mode)'
+        required: false
+        default: 'random'
 
 permissions:
   contents: write   # allows the workflow to commit + push the new post JSON
@@ -45,6 +49,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TOPIC_OVERRIDE: ${{ github.event.inputs.topic_override }}
           MODE_OVERRIDE:  ${{ github.event.inputs.mode }}
+          CATEGORY_OVERRIDE: ${{ github.event.inputs.category }}
         run: |
           # Determine mode: explicit override > random 50/50 on schedule
           MODE="${MODE_OVERRIDE:-random}"
@@ -55,8 +60,15 @@ jobs:
           fi
 
           if [ "$MODE" = "rss" ]; then
-            echo "Running generate-news.js (RSS mode)…"
-            node generate-news.js
+            # Determine feed category: explicit override > random 50/50
+            CAT="${CATEGORY_OVERRIDE:-random}"
+            if [ "$CAT" = "random" ]; then
+              RAND2=$((RANDOM % 2))
+              if [ "$RAND2" -eq 0 ]; then CAT="world"; else CAT="tech"; fi
+              echo "Randomly selected category: $CAT"
+            fi
+            echo "Running generate-news.js (RSS mode, category: $CAT)…"
+            FEED_CATEGORY="$CAT" node generate-news.js
           else
             echo "Running generate.js (AI topic mode)…"
             node generate.js

@@ -24,8 +24,8 @@ const path   = require('path');
 const https  = require('https');
 const http   = require('http');
 
-// ── RSS Feed list ──────────────────────────────────────────────────────────────
-const FEEDS = [
+// ── RSS Feed lists ─────────────────────────────────────────────────────────────
+const WORLD_FEEDS = [
   { id: 'npr-politics',    name: 'NPR – Politics',               url: 'https://feeds.npr.org/1014/rss.xml' },
   { id: 'nyt-politics',    name: 'New York Times – Politics',    url: 'https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml' },
   { id: 'thehill',         name: 'The Hill',                     url: 'https://thehill.com/feed/' },
@@ -43,6 +43,28 @@ const FEEDS = [
   { id: 'politico-eu',     name: 'POLITICO Europe',              url: 'https://www.politico.eu/feed/' },
   { id: 'national-review', name: 'National Review',              url: 'https://www.nationalreview.com/feed/' },
 ];
+
+const TECH_FEEDS = [
+  { id: 'techcrunch',        name: 'TechCrunch',                   url: 'https://techcrunch.com/feed/' },
+  { id: 'theverge',          name: 'The Verge',                    url: 'https://www.theverge.com/rss/full.xml' },
+  { id: 'venturebeat',       name: 'VentureBeat',                  url: 'https://venturebeat.com/feed/' },
+  { id: 'hackernews',        name: 'Hacker News',                  url: 'https://news.ycombinator.com/rss' },
+  { id: 'wired',             name: 'Wired',                        url: 'https://www.wired.com/feed/rss' },
+  { id: 'arstechnica',       name: 'Ars Technica',                 url: 'https://arstechnica.com/feed/' },
+  { id: 'mit-tech-review',   name: 'MIT Technology Review',        url: 'https://www.technologyreview.com/feed/' },
+  { id: 'pragmatic-engineer',name: 'The Pragmatic Engineer',       url: 'https://blog.pragmaticengineer.com/rss/' },
+  { id: 'joel-on-software',  name: 'Joel on Software',             url: 'https://www.joelonsoftware.com/feed/' },
+  { id: 'slack-engineering', name: 'Slack Engineering',            url: 'https://slack.engineering/feed' },
+  { id: 'cloudflare-blog',   name: 'Cloudflare Blog',              url: 'https://blog.cloudflare.com/rss/' },
+  { id: 'stripe-blog',       name: 'Stripe Blog',                  url: 'https://stripe.com/blog/feed.rss' },
+  { id: 'meta-engineering',  name: 'Meta Engineering',             url: 'https://engineering.fb.com/feed/' },
+  { id: 'netflix-tech',      name: 'Netflix Tech Blog',            url: 'https://netflixtechblog.com/feed' },
+  { id: 'towards-data-science', name: 'Towards Data Science',     url: 'https://towardsdatascience.com/feed' },
+  { id: 'farnam-street',     name: 'Farnam Street',                url: 'https://fs.blog/feed/' },
+];
+
+// All feeds combined, for FEED_ID lookup
+const ALL_FEEDS = [...WORLD_FEEDS, ...TECH_FEEDS];
 
 // ── Content filters ────────────────────────────────────────────────────────────
 // Articles matching these keywords are skipped — we want nothing about violence, war, death.
@@ -172,9 +194,11 @@ async function main() {
 
   // ── Resolve which article to use ────────────────────────────────────────────
   let article;
+  let feedCategory = 'world'; // default; updated below when feed is resolved
 
   if (process.env.ARTICLE_URL) {
     // Caller supplied a specific article URL
+    feedCategory = (process.env.FEED_CATEGORY || 'world').toLowerCase().replace('random', 'world');
     article = {
       title: process.env.ARTICLE_TITLE || process.env.ARTICLE_URL,
       link:  process.env.ARTICLE_URL,
@@ -187,17 +211,28 @@ async function main() {
     let feedName = feedUrl;
 
     if (!feedUrl && process.env.FEED_ID) {
-      const found = FEEDS.find(f => f.id === process.env.FEED_ID);
+      const found = ALL_FEEDS.find(f => f.id === process.env.FEED_ID);
       if (!found) { console.error(`Unknown FEED_ID: ${process.env.FEED_ID}`); process.exit(1); }
       feedUrl  = found.url;
       feedName = found.name;
+      feedCategory = TECH_FEEDS.some(f => f.id === found.id) ? 'tech' : 'world';
     }
 
     if (!feedUrl) {
-      const picked = FEEDS[Math.floor(Math.random() * FEEDS.length)];
+      // Resolve feed pool from FEED_CATEGORY env var (world | tech | random)
+      let pool;
+      const cat = (process.env.FEED_CATEGORY || 'random').toLowerCase();
+      if (cat === 'tech')        pool = TECH_FEEDS;
+      else if (cat === 'world')  pool = WORLD_FEEDS;
+      else {
+        // random: pick either pool with equal probability
+        pool = Math.random() < 0.5 ? WORLD_FEEDS : TECH_FEEDS;
+      }
+      feedCategory = (pool === TECH_FEEDS) ? 'tech' : 'world';
+      const picked = pool[Math.floor(Math.random() * pool.length)];
       feedUrl  = picked.url;
       feedName = picked.name;
-      console.log(`Auto-selected feed: ${feedName}`);
+      console.log(`Auto-selected feed: ${feedName} (category: ${feedCategory})`);
     }
 
     console.log(`Fetching RSS: ${feedUrl}`);
@@ -338,6 +373,7 @@ Choose the best creative angle for this particular story. Write the full post in
     readTime:      post.readTime       || '5 min',
     date,
     topicSeed:     'news-inspired',
+    category:      feedCategory,
     featuredImage: post.featuredImage  || article.image || '',
     newsSource:    post.newsSource     || { title: article.title, url: article.link },
     body:          post.body,
