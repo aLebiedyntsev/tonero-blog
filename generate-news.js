@@ -189,6 +189,17 @@ function extractTag(xml, tag) {
   return decodeEntities(stripCdata(m[1]).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
 }
 
+function extractPubDate(itemXml) {
+  // RSS <pubDate> or Atom <updated> / <published>
+  let m = itemXml.match(/<pubDate>([^<]+)<\/pubDate>/i);
+  if (!m) m = itemXml.match(/<updated>([^<]+)<\/updated>/i);
+  if (!m) m = itemXml.match(/<published>([^<]+)<\/published>/i);
+  if (!m) m = itemXml.match(/<dc:date>([^<]+)<\/dc:date>/i);
+  if (!m) return null;
+  const d = new Date(m[1].trim());
+  return isNaN(d.getTime()) ? null : d;
+}
+
 function extractLink(itemXml) {
   // RSS <link>url</link> — may appear as #text node (tricky due to atom:link)
   let m = itemXml.match(/<link>([^<]+)<\/link>/i);
@@ -229,15 +240,16 @@ function parseItems(xml) {
   // Support both RSS <item> and Atom <entry>
   const entryRe = /<(?:item|entry)[\s>]([\s\S]*?)<\/(?:item|entry)>/gi;
   let m;
-  while ((m = entryRe.exec(xml)) !== null && items.length < 15) {
-    const body  = m[1];
-    const title = extractTag(body, 'title');
-    const link  = extractLink(body);
-    const desc  = extractTag(body, 'description') ||
-                  extractTag(body, 'summary')     ||
-                  extractTag(body, 'content');
-    const image = extractImage(body);
-    if (title && link) items.push({ title, link, desc, image });
+  while ((m = entryRe.exec(xml)) !== null && items.length < 30) {
+    const body    = m[1];
+    const title   = extractTag(body, 'title');
+    const link    = extractLink(body);
+    const desc    = extractTag(body, 'description') ||
+                    extractTag(body, 'summary')     ||
+                    extractTag(body, 'content');
+    const image   = extractImage(body);
+    const pubDate = extractPubDate(body);
+    if (title && link) items.push({ title, link, desc, image, pubDate });
   }
   return items;
 }
@@ -303,8 +315,23 @@ async function main() {
     const items = parseItems(xml);
     if (items.length === 0) { console.error('No items found in feed'); process.exit(1); }
 
+    // ── Age filter ─────────────────────────────────────────────────────────────
+    // NEWS_MAX_AGE_DAYS: only consider articles published within N days (default 3).
+    // Value 0 means no filter. Items without a pubDate are kept (we don't know their age).
+    const maxAgeDays = parseInt(process.env.NEWS_MAX_AGE_DAYS ?? '3', 10);
+    const cutoff = maxAgeDays > 0 ? new Date(Date.now() - maxAgeDays * 86400_000) : null;
+    const ageFiltered = cutoff
+      ? items.filter(i => !i.pubDate || i.pubDate >= cutoff)
+      : items;
+
+    if (ageFiltered.length === 0) {
+      console.error(`No articles found within the last ${maxAgeDays} day(s). Try increasing the max age filter.`);
+      process.exit(1);
+    }
+    console.log(`Age filter: keeping ${ageFiltered.length} of ${items.length} items (max ${maxAgeDays}d)`);
+
     // Score items: exclude violence, rank by communication relevance — keep top 10
-    const candidates = items
+    const candidates = ageFiltered
       .filter(i => !EXCLUDE_RE.test(i.title + ' ' + i.desc))
       .map(i => ({ ...i, score: commScore(i.title + ' ' + i.desc) }))
       .sort((a, b) => b.score - a.score)
