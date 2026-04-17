@@ -33,17 +33,24 @@ bash scripts/deploy.sh <service> [branch]
 ## Deploy Flow (per service)
 
 1. SSH to `root@46.225.147.249`
-2. `git pull origin <branch>` in `/opt/tonero/<repo>/`
+2. `git restore .` then `git pull origin <branch>` in `/opt/tonero/<repo>/`
+   - **Drift protection:** the script runs `git restore .` (and for static-file services, `git clean -fd`) before pulling so any locally-mutated tracked files — e.g. an `inject-footer.js` run that rewrote every page — are reverted and can't block the fast-forward merge.
 3. **Docker services** (`api`, `notification`):
    ```bash
    docker compose up -d --build --remove-orphans
    ```
-4. **Frontend services** (`app`, `web`, `admin`, `blog`, `status`):
+4. **Static-file services** (`web`, `status`):
+   ```bash
+   node scripts/build-sitemap.js   # web only — regenerates sitemap.xml
+   node scripts/inject-footer.js   # stamps footer + BreadcrumbList JSON-LD
+   # nginx serves the directory directly — no rsync, no build
+   ```
+5. **SPA services** (`app`, `admin`, `blog`):
    ```bash
    npm ci && npm run build
-   # rsync build output → nginx webroot
+   # rsync dist/ → nginx webroot
    ```
-5. Purge Cloudflare cache for the `tonero.app` zone automatically
+6. Purge Cloudflare cache for the `tonero.app` zone automatically
 
 ## Examples
 

@@ -16,6 +16,9 @@ npm run dev               # nodemon src/index.js
 - API available at: `http://localhost:3000` (or port in `.env`)
 - DB init/reset: `psql $DATABASE_URL -f db/schema.sql` (idempotent)
 - DB migrations: run numbered files in `db/migrations/` manually
+  - Locally: `psql $DATABASE_URL < db/migrations/00X_name.sql`
+  - On prod: `docker compose exec -T db psql -U tonero tonero < db/migrations/00X_name.sql`
+  - All migration files use `IF NOT EXISTS` so reruns are safe
 
 ## tonero-notification (Email microservice)
 
@@ -79,12 +82,13 @@ Copy `.env.example` to `.env` in each service and fill in:
 | Variable | Used in |
 |---|---|
 | `DATABASE_URL` | tonero-api |
-| `JWT_SECRET` | tonero-api |
-| `JWT_REFRESH_SECRET` | tonero-api |
+| `JWT_ACCESS_SECRET` | tonero-api (preferred; `JWT_SECRET` is the legacy fallback) |
+| `JWT_REFRESH_SECRET` | tonero-api (must differ from `JWT_ACCESS_SECRET`) |
 | `OPENAI_API_KEY` | tonero-api |
 | `STRIPE_SECRET_KEY` | tonero-api |
 | `STRIPE_WEBHOOK_SECRET` | tonero-api |
 | `STRIPE_PORTAL_CONFIG` | tonero-api (live portal config ID `bpc_*`) |
+| `ALLOWED_EXTENSION_IDS` | tonero-api — comma-separated list of allowed browser-extension IDs (see `AGENTS.md → Security hardening`). Defaults to the production Chrome Web Store listing if unset. |
 | `SENDGRID_API_KEY` | tonero-notification |
 | `CLOUDFLARE_API_TOKEN` | tonero-infra deploy.sh |
 

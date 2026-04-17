@@ -98,5 +98,10 @@ Built output is deployed to `/opt/tonero/tonero-web/posts/` on the production se
 ## Key decisions
 - **No database** — posts stored as JSON files on disk; fast to deploy, easy to inspect
 - **Single-file post format** — JSON with embedded HTML body; no templating engine needed at generation time
+- **Automatic cross-linking** — `build.js` injects a "Continue reading" section into every post HTML:
+  - Up to 3 related blog posts picked by tag overlap (most-overlap first, newest as fallback)
+  - Up to 2 SEO landing-page links matched by keyword against the post's title + description + tags
+  - Cross-links are styled as cards (`.cross-link-card`) using existing CSS variables
+  - To add a new SEO landing page to the matching pool, add an entry to `SEO_PAGES` in `build.js`
 - **Disclosure required** — every news-inspired post links back to the original article (enforced in the GPT prompt)
 - **Violence filter** — `EXCLUDE_RE` regex blocks categories like war/military/crime from being selected

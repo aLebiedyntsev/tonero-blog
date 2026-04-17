@@ -96,8 +96,102 @@ function buildManifest(posts) {
   console.log(`  ✓ public/posts/manifest.js  (${metadata.length} posts)`);
 }
 
+// ── Cross-link helpers ───────────────────────────────────────────────────────
+
+// SEO landing pages with keyword lists for matching.
+const SEO_PAGES = [
+  { url: '../grammarly-alternative.html',           title: 'Tonero vs Grammarly',                 keywords: ['grammarly', 'grammar', 'spelling', 'checker'] },
+  { url: '../quillbot-alternative.html',            title: 'Tonero vs QuillBot',                  keywords: ['quillbot', 'paraphrase', 'rephrase', 'paraphrasing'] },
+  { url: '../wordtune-alternative.html',            title: 'Tonero vs Wordtune',                  keywords: ['wordtune', 'rephrase', 'sentence rewriter'] },
+  { url: '../rewrite-email-to-be-professional.html',title: 'How to write professional emails',    keywords: ['professional', 'formal', 'polished', 'credible'] },
+  { url: '../rewrite-email-to-be-friendly.html',   title: 'How to write friendly emails',        keywords: ['friendly', 'warm', 'casual', 'approachable'] },
+  { url: '../rewrite-email-to-be-polite.html',     title: 'How to write polite emails',          keywords: ['polite', 'rude', 'harsh', 'impolite'] },
+  { url: '../rewrite-email-to-be-confident.html',  title: 'How to sound confident in emails',    keywords: ['confident', 'assertive', 'hesitant', 'uncertainty', 'confident'] },
+  { url: '../rewrite-email-to-be-direct.html',     title: 'How to write direct emails',          keywords: ['direct', 'concise', 'vague', 'unclear', 'straightforward'] },
+  { url: '../rewrite-angry-email.html',            title: 'Fix angry emails before you send',    keywords: ['angry', 'frustrated', 'aggressive', 'emotional', 'heated'] },
+  { url: '../rewrite-passive-aggressive-email.html',title: 'Fix passive-aggressive emails',      keywords: ['passive', 'passive-aggressive', 'sarcasm', 'sarcastic', 'subtle'] },
+  { url: '../ai-email-rewriter.html',              title: 'AI email rewriter',                   keywords: ['ai', 'chatgpt', 'rewriter', 'rewrite', 'artificial intelligence'] },
+  { url: '../improve-message-tone.html',           title: 'Improve message tone',                keywords: ['tone', 'message', 'improve', 'slack', 'workplace'] },
+  { url: '../make-email-more-professional.html',   title: 'Make email more professional',        keywords: ['professional', 'email', 'work', 'career'] },
+  { url: '../polite-email-generator.html',         title: 'Polite email generator',              keywords: ['polite', 'generator', 'soft', 'gentle'] },
+  { url: '../rewrite-email-tone.html',             title: 'Rewrite email tone',                  keywords: ['tone', 'email', 'rewrite'] },
+  { url: '../tonero-for-gmail.html',               title: 'Tonero for Gmail',                    keywords: ['gmail', 'google mail', 'email'] },
+  { url: '../tonero-for-slack.html',               title: 'Tonero for Slack',                    keywords: ['slack', 'message', 'dm', 'channel'] },
+  { url: '../tonero-for-teams.html',               title: 'Tonero for Microsoft Teams',          keywords: ['teams', 'microsoft', 'microsoft teams'] },
+];
+
+/**
+ * Returns up to `max` published posts most related to `post` by tag overlap.
+ * Excludes the post itself. Falls back to most-recent posts.
+ */
+function findRelatedPosts(post, allPosts, max = 3) {
+  const myTags = new Set((post.tags || []).map(t => t.toLowerCase()));
+  const mySlug = post.slug;
+
+  const scored = allPosts
+    .filter(p => p.slug && p.slug !== mySlug && p.published !== false)
+    .map(p => {
+      const theirTags = (p.tags || []).map(t => t.toLowerCase());
+      const overlap   = theirTags.filter(t => myTags.has(t)).length;
+      return { post: p, score: overlap };
+    })
+    .sort((a, b) => b.score - a.score || 0);
+
+  return scored.slice(0, max).map(s => s.post);
+}
+
+/**
+ * Returns up to `max` SEO landing pages that best match the post's title + tags.
+ */
+function findRelatedSeoPages(post, max = 2) {
+  const haystack = [
+    post.title || '',
+    post.description || '',
+    ...(post.tags || []),
+  ].join(' ').toLowerCase();
+
+  const scored = SEO_PAGES.map(page => {
+    const hits = page.keywords.filter(kw => haystack.includes(kw)).length;
+    return { page, hits };
+  }).filter(s => s.hits > 0).sort((a, b) => b.hits - a.hits);
+
+  return scored.slice(0, max).map(s => s.page);
+}
+
+/**
+ * Builds the HTML for the cross-links section (related posts + SEO pages).
+ * Returns empty string if nothing to link.
+ */
+function buildCrossLinksSection(post, allPosts) {
+  const relatedPosts    = findRelatedPosts(post, allPosts, 3);
+  const relatedSeoPages = findRelatedSeoPages(post, 2);
+
+  if (relatedPosts.length === 0 && relatedSeoPages.length === 0) return '';
+
+  const postCards = relatedPosts.map(p => `
+          <a href="${escAttr(p.slug)}.html" class="cross-link-card">
+            <span class="cross-link-emoji">${escHtml(p.emoji || '✦')}</span>
+            <span class="cross-link-title">${escHtml(p.title)}</span>
+            <span class="cross-link-meta">${escHtml(p.readTime || '')} read</span>
+          </a>`).join('');
+
+  const pageCards = relatedSeoPages.map(p => `
+          <a href="${escAttr(p.url)}" class="cross-link-card cross-link-card--guide">
+            <span class="cross-link-emoji">→</span>
+            <span class="cross-link-title">${escHtml(p.title)}</span>
+            <span class="cross-link-meta">Guide</span>
+          </a>`).join('');
+
+  return `
+        <div class="cross-links">
+          <h3 class="cross-links__heading">Continue reading</h3>
+          <div class="cross-links__grid">${postCards}${pageCards}
+          </div>
+        </div>`;
+}
+
 // ── Build individual post pages ───────────────────────────────────────────────
-function buildPostPage(post) {
+function buildPostPage(post, allPosts) {
   const tags = Array.isArray(post.tags) ? post.tags : [];
   const tagBadges = tags.slice(0, 2).map(t =>
     `<span class="post-tag">${escHtml(t)}</span>`
@@ -176,6 +270,15 @@ function buildPostPage(post) {
     .post-nav { margin-top: 56px; padding-top: 32px; border-top: 1px solid var(--border); }
     .post-nav a { color: var(--brand); font-weight: 600; text-decoration: none; }
     .post-nav a:hover { text-decoration: underline; }
+    .cross-links { margin-top: 56px; padding-top: 32px; border-top: 1px solid var(--border); }
+    .cross-links__heading { font-size: 1rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 16px; }
+    .cross-links__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+    .cross-link-card { display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; text-decoration: none; transition: border-color .15s, box-shadow .15s; }
+    .cross-link-card:hover { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-light); }
+    .cross-link-emoji { font-size: 1.1rem; line-height: 1; }
+    .cross-link-title { font-size: 0.9375rem; font-weight: 600; color: var(--text); line-height: 1.35; }
+    .cross-link-meta { font-size: 0.8rem; color: var(--text-muted); }
+    .cross-link-card--guide .cross-link-emoji { color: var(--brand); font-weight: 700; }
     .post-featured-image { width: 100%; max-height: 420px; object-fit: cover; border-radius: 16px; margin-bottom: 40px; display: block; }
     .news-summary {
       background: var(--surface); border-left: 3px solid var(--brand);
@@ -229,6 +332,7 @@ function buildPostPage(post) {
       <div class="post-content">
         ${post.featuredImage ? `<img src="${escAttr(post.featuredImage)}" alt="${escAttr(post.title)}" class="post-featured-image" loading="lazy" />` : ''}
         ${post.body}
+        ${buildCrossLinksSection(post, allPosts)}
         <div class="post-cta">
           <h3>Stop guessing — let Tonero fix your tone in one click</h3>
           <p>Works inside Slack, Gmail, Teams, LinkedIn and every text box in Chrome.<br />30 free rewrites/month. No credit card required.</p>
@@ -302,7 +406,7 @@ function main() {
   // Individual post pages
   for (const post of posts) {
     if (!post.slug) { console.warn('  [warn] post without slug, skipping'); continue; }
-    const html = buildPostPage(post);
+    const html = buildPostPage(post, posts);
     const outPath = path.join(PUBLIC_POSTS_DIR, `${post.slug}.html`);
     fs.writeFileSync(outPath, html);
     console.log(`  ✓ public/posts/${post.slug}.html`);
